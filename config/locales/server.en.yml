@@ -1,5 +1,5 @@
 en:
   site_settings:
-    discourse_brandme_community_access_enabled: "Enable BrandMe Community Access integration"
-    discourse_brandme_community_access_secret: "Shared secret used to verify HMAC signatures from the Shopify app"
-    discourse_brandme_community_access_product_group_mappings: "Product-to-group mappings. One per line, format: productId=groupName (e.g. 1234567890=premium_members)"
+    discourse_brandme_community_access_enabled: "Enable the BrandMe Community Access integration"
+    discourse_brandme_community_access_secret: "Shared secret used to authenticate and verify HMAC-signed requests from the BrandMe Shopify app"
+    discourse_brandme_community_access_product_group_mappings: "Map Shopify product IDs to Discourse groups. Enter one mapping per line using the format: productId=groupName (e.g. 1234567890=premium_members)"

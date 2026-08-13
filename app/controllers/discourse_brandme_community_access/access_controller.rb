@@ -27,8 +27,8 @@ module DiscourseBrandmeCommunityAccess
         return render_error("Invalid payload: missing required fields", :bad_request)
       end
 
-      unless ALLOWED_EVENTS.include?(payload["event"])
-        return render_error("Unknown event type: #{payload["event"]}", :bad_request)
+      if ALLOWED_EVENTS.exclude?(payload["event"])
+        return render_error("Invalid event", :bad_request)
       end
 
       if ProcessedEvent.exists?(webhook_id: payload["webhookId"])
@@ -93,7 +93,7 @@ module DiscourseBrandmeCommunityAccess
       expected_signature = OpenSSL::HMAC.hexdigest("sha256", secret, "#{timestamp}.#{raw_body}")
 
       unless secure_signature_match?(expected_signature, signature)
-        return render_error("Invalid signature", :unauthorized)
+        render_error("Invalid signature", :unauthorized)
       end
     end
 
