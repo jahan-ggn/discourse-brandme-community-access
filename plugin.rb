@@ -14,5 +14,4 @@ end
 
 require_relative "lib/discourse_brandme_community_access/engine"
 
-after_initialize do
-end
+after_initialize {}

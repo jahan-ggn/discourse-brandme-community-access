@@ -17,8 +17,6 @@ class CreateBrandmeProcessedEvents < ActiveRecord::Migration[8.0]
               unique: true,
               name: "idx_brandme_processed_events_webhook_id"
 
-    add_index :brandme_processed_events,
-              :order_id,
-              name: "idx_brandme_processed_events_order_id"
+    add_index :brandme_processed_events, :order_id, name: "idx_brandme_processed_events_order_id"
   end
 end

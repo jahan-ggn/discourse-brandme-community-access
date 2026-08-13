@@ -4,10 +4,7 @@ module DiscourseBrandmeCommunityAccess
   class AccessLog < ActiveRecord::Base
     self.table_name = "brandme_access_logs"
 
-    STATUSES = %w[
-      success
-      failed
-    ].freeze
+    STATUSES = %w[success failed].freeze
 
     ACTIONS = %w[
       added_to_group
@@ -27,19 +24,10 @@ module DiscourseBrandmeCommunityAccess
     validates :action, presence: true
     validates :status, presence: true
 
-    validates :event_type,
-              inclusion: {
-                in: %w[purchase refund],
-              }
+    validates :event_type, inclusion: { in: %w[purchase refund] }
 
-    validates :action,
-              inclusion: {
-                in: ACTIONS,
-              }
+    validates :action, inclusion: { in: ACTIONS }
 
-    validates :status,
-              inclusion: {
-                in: STATUSES,
-              }
+    validates :status, inclusion: { in: STATUSES }
   end
 end

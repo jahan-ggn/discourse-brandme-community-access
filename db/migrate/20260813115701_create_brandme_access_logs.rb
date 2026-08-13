@@ -16,24 +16,14 @@ class CreateBrandmeAccessLogs < ActiveRecord::Migration[8.0]
       t.timestamps
     end
 
-    add_index :brandme_access_logs,
-              :webhook_id,
-              name: "idx_brandme_access_logs_webhook_id"
+    add_index :brandme_access_logs, :webhook_id, name: "idx_brandme_access_logs_webhook_id"
 
-    add_index :brandme_access_logs,
-              :order_id,
-              name: "idx_brandme_access_logs_order_id"
+    add_index :brandme_access_logs, :order_id, name: "idx_brandme_access_logs_order_id"
 
-    add_index :brandme_access_logs,
-              :product_id,
-              name: "idx_brandme_access_logs_product_id"
+    add_index :brandme_access_logs, :product_id, name: "idx_brandme_access_logs_product_id"
 
-    add_index :brandme_access_logs,
-              :email,
-              name: "idx_brandme_access_logs_email"
+    add_index :brandme_access_logs, :email, name: "idx_brandme_access_logs_email"
 
-    add_index :brandme_access_logs,
-              :created_at,
-              name: "idx_brandme_access_logs_created_at"
+    add_index :brandme_access_logs, :created_at, name: "idx_brandme_access_logs_created_at"
   end
 end
