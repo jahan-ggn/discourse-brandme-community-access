@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
-DiscourseBrandmeCommunityAccess::Engine.routes.draw do
-  get "/examples" => "examples#index"
-  # define routes here
-end
+DiscourseBrandmeCommunityAccess::Engine.routes.draw { post "/access" => "access#create" }
 
-Discourse::Application.routes.draw { mount ::DiscourseBrandmeCommunityAccess::Engine, at: "discourse-brandme-community-access" }
+Discourse::Application.routes.draw do
+  mount ::DiscourseBrandmeCommunityAccess::Engine, at: "brandme"
+end

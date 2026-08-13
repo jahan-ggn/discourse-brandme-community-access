@@ -1,4 +1,11 @@
-discourse_brandme_community_access:
+plugins:
   discourse_brandme_community_access_enabled:
-    default: false
     client: true
+    default: false
+  discourse_brandme_community_access_secret:
+    default: ""
+    secret: true
+  discourse_brandme_community_access_product_group_mappings:
+    default: ""
+    client: true
+    type: list

@@ -1,12 +1,10 @@
 # frozen_string_literal: true
 
 # name: discourse-brandme-community-access
-# about: TODO
-# meta_topic_id: TODO
+# about: Grant and revoke Discourse group access based on Shopify product purchases and refunds.
 # version: 0.0.1
-# authors: Discourse
-# url: TODO
-# required_version: 2.7.0
+# authors: Jahan Gagan
+# url: http://github.com/jahan-ggn/discourse-brandme-community-access
 
 enabled_site_setting :discourse_brandme_community_access_enabled
 
@@ -17,5 +15,4 @@ end
 require_relative "lib/discourse_brandme_community_access/engine"
 
 after_initialize do
-  # Code which should run after Rails has finished booting
 end

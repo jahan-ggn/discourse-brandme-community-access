@@ -3,7 +3,8 @@ en:
     admin:
       site_settings:
         categories:
-          discourse_brandme_community_access: "Discourse Brandme Community Access"
+          discourse_brandme_community_access: "BrandMe Community Access"
   js:
     discourse_brandme_community_access:
-      placeholder: placeholder
+      title: "BrandMe Community Access"
+      admin_navigation: "BrandMe Community Access"
