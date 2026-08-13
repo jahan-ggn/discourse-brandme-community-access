@@ -13,3 +13,22 @@ module DiscourseBrandmeCommunityAccess
     validates :email, presence: true
   end
 end
+
+# == Schema Information
+#
+# Table name: brandme_processed_events
+#
+#  id         :bigint           not null, primary key
+#  email      :string           not null
+#  event_type :string           not null
+#  created_at :datetime         not null
+#  updated_at :datetime         not null
+#  order_id   :string           not null
+#  product_id :string           not null
+#  webhook_id :string           not null
+#
+# Indexes
+#
+#  idx_brandme_processed_events_order_id    (order_id)
+#  idx_brandme_processed_events_webhook_id  (webhook_id) UNIQUE
+#

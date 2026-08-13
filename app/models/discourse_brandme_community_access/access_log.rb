@@ -31,3 +31,29 @@ module DiscourseBrandmeCommunityAccess
     validates :status, inclusion: { in: STATUSES }
   end
 end
+
+# == Schema Information
+#
+# Table name: brandme_access_logs
+#
+#  id         :bigint           not null, primary key
+#  action     :string           not null
+#  email      :string           not null
+#  event_type :string           not null
+#  group_name :string
+#  message    :text
+#  status     :string           not null
+#  created_at :datetime         not null
+#  updated_at :datetime         not null
+#  order_id   :string           not null
+#  product_id :string           not null
+#  webhook_id :string           not null
+#
+# Indexes
+#
+#  idx_brandme_access_logs_created_at  (created_at)
+#  idx_brandme_access_logs_email       (email)
+#  idx_brandme_access_logs_order_id    (order_id)
+#  idx_brandme_access_logs_product_id  (product_id)
+#  idx_brandme_access_logs_webhook_id  (webhook_id)
+#
