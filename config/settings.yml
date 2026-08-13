@@ -1,4 +1,4 @@
-TODO_plugin_name:
-  plugin_name_enabled:
+discourse_brandme_community_access:
+  discourse_brandme_community_access_enabled:
     default: false
     client: true

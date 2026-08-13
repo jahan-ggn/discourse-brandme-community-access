@@ -3,7 +3,7 @@ en:
     admin:
       site_settings:
         categories:
-          TODO_plugin_name: "Plugin Name"
+          discourse_brandme_community_access: "Discourse Brandme Community Access"
   js:
-    discourse_plugin_name:
+    discourse_brandme_community_access:
       placeholder: placeholder

@@ -1,4 +1,4 @@
-# **Plugin Name** Plugin
+# **Discourse Brandme Community Access** Plugin
 
 **Plugin Summary**
 
