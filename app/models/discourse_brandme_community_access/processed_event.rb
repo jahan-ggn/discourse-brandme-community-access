@@ -4,16 +4,15 @@ module DiscourseBrandmeCommunityAccess
   class ProcessedEvent < ActiveRecord::Base
     self.table_name = "brandme_processed_events"
 
-    validates :webhook_id, presence: true, uniqueness: true
-
+    validates :webhook_id, presence: true
     validates :event_type, presence: true, inclusion: { in: %w[purchase refund] }
-
     validates :order_id, presence: true
     validates :product_id, presence: true
     validates :email, presence: true
+
+    validates :webhook_id, uniqueness: { scope: [:product_id, :event_type] }
   end
 end
-
 # == Schema Information
 #
 # Table name: brandme_processed_events
@@ -30,5 +29,5 @@ end
 # Indexes
 #
 #  idx_brandme_processed_events_order_id    (order_id)
-#  idx_brandme_processed_events_webhook_id  (webhook_id) UNIQUE
+#  idx_brandme_processed_events_unique_event  (webhook_id,product_id,event_type) UNIQUE
 #
