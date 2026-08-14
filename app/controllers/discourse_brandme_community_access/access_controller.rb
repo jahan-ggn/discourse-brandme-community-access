@@ -46,9 +46,17 @@ module DiscourseBrandmeCommunityAccess
     private
 
     def verify_hmac
-      secret = SiteSetting.discourse_brandme_community_access_secret
+      configured_secrets =
+        SiteSetting
+          .discourse_brandme_community_access_secret
+          .to_s
+          .split("|")
+          .map(&:strip)
+          .reject(&:blank?)
 
-      return render_error("BrandMe secret is not configured", :forbidden) if secret.blank?
+      if configured_secrets.empty?
+        return render_error("BrandMe secret is not configured", :forbidden)
+      end
 
       timestamp = request.headers["X-BrandMe-Timestamp"]
 
@@ -74,11 +82,16 @@ module DiscourseBrandmeCommunityAccess
 
       raw_body = request.raw_post
 
-      expected_signature = OpenSSL::HMAC.hexdigest("sha256", secret, "#{timestamp}.#{raw_body}")
+      message = "#{timestamp}.#{raw_body}"
 
-      unless secure_signature_match?(expected_signature, signature)
-        render_error("Invalid signature", :unauthorized)
-      end
+      valid_signature =
+        configured_secrets.any? do |secret|
+          expected_signature = OpenSSL::HMAC.hexdigest("sha256", secret, message)
+
+          secure_signature_match?(expected_signature, signature)
+        end
+
+      render_error("Invalid signature", :unauthorized) unless valid_signature
     end
 
     def secure_signature_match?(expected_signature, signature)
@@ -123,6 +136,7 @@ module DiscourseBrandmeCommunityAccess
       return nil if mappings.blank?
 
       mappings
+        .to_s
         .split("|")
         .each do |entry|
           mapped_product_id, group_name = entry.split("=", 2)
@@ -155,19 +169,21 @@ module DiscourseBrandmeCommunityAccess
     def handle_existing_user_purchase(payload, group, user)
       if group
         add_user_to_group(payload, group, user)
-      else
-        log_access(
-          payload: payload,
-          group: nil,
-          action: "no_action_needed",
-          status: "success",
-          message: "User already exists and product has no group mapping",
-        )
 
-        mark_processed(payload)
-
-        render_success("User #{user.username} already exists — no group assignment required")
+        return
       end
+
+      log_access(
+        payload: payload,
+        group: nil,
+        action: "no_action_needed",
+        status: "success",
+        message: "User already exists and product has no group mapping",
+      )
+
+      mark_processed(payload)
+
+      render_success("User #{user.username} already exists — no group assignment required")
     end
 
     def add_user_to_group(payload, group, user)
@@ -179,6 +195,11 @@ module DiscourseBrandmeCommunityAccess
 
       render_success("User #{user.username} added to group #{group.name}")
     rescue StandardError => e
+      Rails.logger.error(
+        "[BrandMe] Failed to add user to group: " \
+          "#{e.class}: #{e.message}",
+      )
+
       log_access(
         payload: payload,
         group: group,
@@ -187,7 +208,7 @@ module DiscourseBrandmeCommunityAccess
         message: e.message,
       )
 
-      render_error("Failed to add user to group: #{e.message}", :internal_server_error)
+      render_error("Failed to add user to group", :internal_server_error)
     end
 
     def invite_user(payload, group, email)
@@ -199,6 +220,11 @@ module DiscourseBrandmeCommunityAccess
     rescue ::Invite::UserExists
       handle_invite_user_exists(payload, group, email)
     rescue StandardError => e
+      Rails.logger.error(
+        "[BrandMe] Failed to send invite: " \
+          "#{e.class}: #{e.message}",
+      )
+
       log_access(
         payload: payload,
         group: group,
@@ -207,7 +233,7 @@ module DiscourseBrandmeCommunityAccess
         message: e.message,
       )
 
-      render_error("Failed to send invite: #{e.message}", :internal_server_error)
+      render_error("Failed to send invite", :internal_server_error)
     end
 
     def handle_existing_invite(payload, group, invite)
@@ -219,19 +245,21 @@ module DiscourseBrandmeCommunityAccess
         mark_processed(payload)
 
         render_success("Pending invite updated with group #{group.name}")
-      else
-        log_access(
-          payload: payload,
-          group: nil,
-          action: "no_action_needed",
-          status: "success",
-          message: "Pending invite already exists and product has no group mapping",
-        )
 
-        mark_processed(payload)
-
-        render_success("Pending invite already exists — no group assignment required")
+        return
       end
+
+      log_access(
+        payload: payload,
+        group: nil,
+        action: "no_action_needed",
+        status: "success",
+        message: "Pending invite already exists and product has no group mapping",
+      )
+
+      mark_processed(payload)
+
+      render_success("Pending invite already exists — no group assignment required")
     end
 
     def create_invite(payload, group, email)
@@ -243,21 +271,23 @@ module DiscourseBrandmeCommunityAccess
         mark_processed(payload)
 
         render_success("Invite sent to #{email} with group #{group.name}")
-      else
-        ::Invite.generate(::Discourse.system_user, email: email)
 
-        log_access(
-          payload: payload,
-          group: nil,
-          action: "invite_sent",
-          status: "success",
-          message: "Standard invite sent without group assignment",
-        )
-
-        mark_processed(payload)
-
-        render_success("Invite sent to #{email} without group assignment")
+        return
       end
+
+      ::Invite.generate(::Discourse.system_user, email: email)
+
+      log_access(
+        payload: payload,
+        group: nil,
+        action: "invite_sent",
+        status: "success",
+        message: "Standard invite sent without group assignment",
+      )
+
+      mark_processed(payload)
+
+      render_success("Invite sent to #{email} without group assignment")
     end
 
     def add_group_to_invite(invite, group)
@@ -271,6 +301,8 @@ module DiscourseBrandmeCommunityAccess
 
       unless user
         message = "Race condition: user could not be found"
+
+        Rails.logger.error("[BrandMe] #{message}")
 
         log_access(
           payload: payload,
@@ -323,6 +355,11 @@ module DiscourseBrandmeCommunityAccess
 
       render_success("User #{user.username} removed from group #{group.name}")
     rescue StandardError => e
+      Rails.logger.error(
+        "[BrandMe] Failed to remove user from group: " \
+          "#{e.class}: #{e.message}",
+      )
+
       log_access(
         payload: payload,
         group: group,
@@ -331,14 +368,14 @@ module DiscourseBrandmeCommunityAccess
         message: e.message,
       )
 
-      render_error("Failed to remove user from group: #{e.message}", :internal_server_error)
+      render_error("Failed to remove user from group", :internal_server_error)
     end
 
     def revoke_pending_invite_group(payload, group, email)
       matching_invites =
-        find_pending_invites(email).select { |invite| invite.groups.exists?(id: group.id) }
+        find_pending_invites(email).joins(:groups).where(groups: { id: group.id }).distinct
 
-      if matching_invites.empty?
+      if matching_invites.none?
         message = "No user or pending invite found for this group"
 
         log_access(
@@ -354,7 +391,7 @@ module DiscourseBrandmeCommunityAccess
         return render_success("No user or pending invite found — nothing to revoke")
       end
 
-      matching_invites.each do |invite|
+      matching_invites.find_each do |invite|
         invite.groups.delete(group)
 
         invite.destroy! if invite.groups.empty?
@@ -366,6 +403,11 @@ module DiscourseBrandmeCommunityAccess
 
       render_success("Pending invite access revoked for group #{group.name}")
     rescue StandardError => e
+      Rails.logger.error(
+        "[BrandMe] Failed to revoke invite: " \
+          "#{e.class}: #{e.message}",
+      )
+
       log_access(
         payload: payload,
         group: group,
@@ -374,7 +416,7 @@ module DiscourseBrandmeCommunityAccess
         message: e.message,
       )
 
-      render_error("Failed to revoke invite access: #{e.message}", :internal_server_error)
+      render_error("Failed to revoke invite access", :internal_server_error)
     end
 
     def find_pending_invite(email)
@@ -405,8 +447,8 @@ module DiscourseBrandmeCommunityAccess
       )
     rescue ActiveRecord::RecordNotUnique
       # The composite unique index on webhook_id,
-      # product_id, and event_type protects against
-      # duplicate inserts from concurrent requests.
+      # product_id, and event_type prevents duplicate
+      # ProcessedEvent records from concurrent requests.
       nil
     end
 

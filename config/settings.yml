@@ -3,7 +3,7 @@ plugins:
     default: false
   discourse_brandme_community_access_secret:
     default: ""
-    secret: true
+    type: list
   discourse_brandme_community_access_product_group_mappings:
     default: ""
     type: list
