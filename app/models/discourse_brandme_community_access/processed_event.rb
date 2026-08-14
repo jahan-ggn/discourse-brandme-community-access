@@ -10,7 +10,7 @@ module DiscourseBrandmeCommunityAccess
     validates :product_id, presence: true
     validates :email, presence: true
 
-    validates :webhook_id, uniqueness: { scope: [:product_id, :event_type] }
+    validates :webhook_id, uniqueness: { scope: %i[product_id event_type] }
   end
 end
 # == Schema Information
@@ -28,6 +28,6 @@ end
 #
 # Indexes
 #
-#  idx_brandme_processed_events_order_id    (order_id)
+#  idx_brandme_processed_events_order_id      (order_id)
 #  idx_brandme_processed_events_unique_event  (webhook_id,product_id,event_type) UNIQUE
 #

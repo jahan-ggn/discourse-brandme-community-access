@@ -15,13 +15,7 @@ module DiscourseBrandmeCommunityAccess
     REPLAY_WINDOW_SECONDS = 300
     MAX_FUTURE_SECONDS = 60
 
-    REQUIRED_FIELDS = %w[
-      event
-      webhookId
-      orderId
-      productId
-      email
-    ].freeze
+    REQUIRED_FIELDS = %w[event webhookId orderId productId email].freeze
 
     ALLOWED_EVENTS = %w[purchase refund].freeze
 
@@ -30,22 +24,14 @@ module DiscourseBrandmeCommunityAccess
       return if performed?
 
       unless valid_payload?(payload)
-        return render_error(
-          "Invalid payload: missing required fields",
-          :bad_request,
-        )
+        return render_error("Invalid payload: missing required fields", :bad_request)
       end
 
       if ALLOWED_EVENTS.exclude?(payload["event"])
-        return render_error(
-          "Invalid event",
-          :bad_request,
-        )
+        return render_error("Invalid event", :bad_request)
       end
 
-      if processed_event?(payload)
-        return render_success("Already processed")
-      end
+      return render_success("Already processed") if processed_event?(payload)
 
       group = find_group_for_product(payload["productId"])
 
@@ -60,103 +46,59 @@ module DiscourseBrandmeCommunityAccess
     private
 
     def verify_hmac
-      secret =
-        SiteSetting.discourse_brandme_community_access_secret
+      secret = SiteSetting.discourse_brandme_community_access_secret
 
-      if secret.blank?
-        return render_error(
-          "BrandMe secret is not configured",
-          :forbidden,
-        )
-      end
+      return render_error("BrandMe secret is not configured", :forbidden) if secret.blank?
 
-      timestamp =
-        request.headers["X-BrandMe-Timestamp"]
+      timestamp = request.headers["X-BrandMe-Timestamp"]
 
-      signature =
-        request.headers["X-BrandMe-Signature"]
+      signature = request.headers["X-BrandMe-Signature"]
 
       if timestamp.blank? || signature.blank?
-        return render_error(
-          "Missing authentication headers",
-          :unauthorized,
-        )
+        return render_error("Missing authentication headers", :unauthorized)
       end
 
       unless timestamp.match?(/\A\d+\z/)
-        return render_error(
-          "Invalid timestamp format",
-          :bad_request,
-        )
+        return render_error("Invalid timestamp format", :bad_request)
       end
 
-      request_time =
-        Time.at(timestamp.to_i / 1000.0)
+      request_time = Time.at(timestamp.to_i / 1000.0)
 
       if request_time < REPLAY_WINDOW_SECONDS.seconds.ago
-        return render_error(
-          "Request timestamp too old",
-          :unauthorized,
-        )
+        return render_error("Request timestamp too old", :unauthorized)
       end
 
       if request_time > MAX_FUTURE_SECONDS.seconds.from_now
-        return render_error(
-          "Request timestamp too far in the future",
-          :unauthorized,
-        )
+        return render_error("Request timestamp too far in the future", :unauthorized)
       end
 
       raw_body = request.raw_post
 
-      expected_signature =
-        OpenSSL::HMAC.hexdigest(
-          "sha256",
-          secret,
-          "#{timestamp}.#{raw_body}",
-        )
+      expected_signature = OpenSSL::HMAC.hexdigest("sha256", secret, "#{timestamp}.#{raw_body}")
 
-      unless secure_signature_match?(
-               expected_signature,
-               signature,
-             )
-        render_error(
-          "Invalid signature",
-          :unauthorized,
-        )
+      unless secure_signature_match?(expected_signature, signature)
+        render_error("Invalid signature", :unauthorized)
       end
     end
 
-    def secure_signature_match?(
-      expected_signature,
-      signature
-    )
+    def secure_signature_match?(expected_signature, signature)
       return false unless expected_signature.bytesize == signature.bytesize
 
-      ActiveSupport::SecurityUtils.secure_compare(
-        expected_signature,
-        signature,
-      )
+      ActiveSupport::SecurityUtils.secure_compare(expected_signature, signature)
     end
 
     def parse_payload
       raw_body = request.raw_post
 
       if raw_body.blank?
-        render_error(
-          "Empty request body",
-          :bad_request,
-        )
+        render_error("Empty request body", :bad_request)
 
         return nil
       end
 
       JSON.parse(raw_body)
     rescue JSON::ParserError
-      render_error(
-        "Invalid JSON",
-        :bad_request,
-      )
+      render_error("Invalid JSON", :bad_request)
 
       nil
     end
@@ -164,9 +106,7 @@ module DiscourseBrandmeCommunityAccess
     def valid_payload?(payload)
       return false unless payload.is_a?(Hash)
 
-      REQUIRED_FIELDS.all? do |field|
-        payload[field].present?
-      end
+      REQUIRED_FIELDS.all? { |field| payload[field].present? }
     end
 
     def processed_event?(payload)
@@ -178,102 +118,66 @@ module DiscourseBrandmeCommunityAccess
     end
 
     def find_group_for_product(product_id)
-      mappings =
-        SiteSetting
-          .discourse_brandme_community_access_product_group_mappings
+      mappings = SiteSetting.discourse_brandme_community_access_product_group_mappings
 
       return nil if mappings.blank?
 
-      mappings.split("|").each do |entry|
-        mapped_product_id, group_name =
-          entry.split("=", 2)
+      mappings
+        .split("|")
+        .each do |entry|
+          mapped_product_id, group_name = entry.split("=", 2)
 
-        next if mapped_product_id.blank?
-        next if group_name.blank?
+          next if mapped_product_id.blank?
+          next if group_name.blank?
 
-        next unless mapped_product_id.strip == product_id.to_s.strip
+          next unless mapped_product_id.strip == product_id.to_s.strip
 
-        group =
-          ::Group.find_by(
-            name: group_name.strip,
-          )
+          group = ::Group.find_by(name: group_name.strip)
 
-        return group if group
-      end
+          return group if group
+        end
 
       nil
     end
 
     def handle_purchase(payload, group)
-      email =
-        normalize_email(payload["email"])
+      email = normalize_email(payload["email"])
 
-      user =
-        ::User.find_by_email(email)
+      user = ::User.find_by_email(email)
 
       if user
-        handle_existing_user_purchase(
-          payload,
-          group,
-          user,
-        )
+        handle_existing_user_purchase(payload, group, user)
       else
-        invite_user(
-          payload,
-          group,
-          email,
-        )
+        invite_user(payload, group, email)
       end
     end
 
-    def handle_existing_user_purchase(
-      payload,
-      group,
-      user
-    )
+    def handle_existing_user_purchase(payload, group, user)
       if group
-        add_user_to_group(
-          payload,
-          group,
-          user,
-        )
+        add_user_to_group(payload, group, user)
       else
         log_access(
           payload: payload,
           group: nil,
           action: "no_action_needed",
           status: "success",
-          message:
-            "User already exists and product has no group mapping",
+          message: "User already exists and product has no group mapping",
         )
 
         mark_processed(payload)
 
-        render_success(
-          "User #{user.username} already exists — no group assignment required",
-        )
+        render_success("User #{user.username} already exists — no group assignment required")
       end
     end
 
-    def add_user_to_group(
-      payload,
-      group,
-      user
-    )
+    def add_user_to_group(payload, group, user)
       group.add(user)
 
-      log_access(
-        payload: payload,
-        group: group,
-        action: "added_to_group",
-        status: "success",
-      )
+      log_access(payload: payload, group: group, action: "added_to_group", status: "success")
 
       mark_processed(payload)
 
-      render_success(
-        "User #{user.username} added to group #{group.name}",
-      )
+      render_success("User #{user.username} added to group #{group.name}")
     rescue StandardError => e
       log_access(
         payload: payload,
@@ -283,39 +187,17 @@ module DiscourseBrandmeCommunityAccess
         message: e.message,
       )
 
-      render_error(
-        "Failed to add user to group: #{e.message}",
-        :internal_server_error,
-      )
+      render_error("Failed to add user to group: #{e.message}", :internal_server_error)
     end
 
-    def invite_user(
-      payload,
-      group,
-      email
-    )
-      existing_invite =
-        find_pending_invite(email)
+    def invite_user(payload, group, email)
+      existing_invite = find_pending_invite(email)
 
-      if existing_invite
-        return handle_existing_invite(
-          payload,
-          group,
-          existing_invite,
-        )
-      end
+      return handle_existing_invite(payload, group, existing_invite) if existing_invite
 
-      create_invite(
-        payload,
-        group,
-        email,
-      )
+      create_invite(payload, group, email)
     rescue ::Invite::UserExists
-      handle_invite_user_exists(
-        payload,
-        group,
-        email,
-      )
+      handle_invite_user_exists(payload, group, email)
     rescue StandardError => e
       log_access(
         payload: payload,
@@ -325,120 +207,70 @@ module DiscourseBrandmeCommunityAccess
         message: e.message,
       )
 
-      render_error(
-        "Failed to send invite: #{e.message}",
-        :internal_server_error,
-      )
+      render_error("Failed to send invite: #{e.message}", :internal_server_error)
     end
 
-    def handle_existing_invite(
-      payload,
-      group,
-      invite
-    )
+    def handle_existing_invite(payload, group, invite)
       if group
-        add_group_to_invite(
-          invite,
-          group,
-        )
+        add_group_to_invite(invite, group)
 
-        log_access(
-          payload: payload,
-          group: group,
-          action: "invite_updated",
-          status: "success",
-        )
+        log_access(payload: payload, group: group, action: "invite_updated", status: "success")
 
         mark_processed(payload)
 
-        render_success(
-          "Pending invite updated with group #{group.name}",
-        )
+        render_success("Pending invite updated with group #{group.name}")
       else
         log_access(
           payload: payload,
           group: nil,
           action: "no_action_needed",
           status: "success",
-          message:
-            "Pending invite already exists and product has no group mapping",
+          message: "Pending invite already exists and product has no group mapping",
         )
 
         mark_processed(payload)
 
-        render_success(
-          "Pending invite already exists — no group assignment required",
-        )
+        render_success("Pending invite already exists — no group assignment required")
       end
     end
 
-    def create_invite(
-      payload,
-      group,
-      email
-    )
+    def create_invite(payload, group, email)
       if group
-        ::Invite.generate(
-          ::Discourse.system_user,
-          email: email,
-          group_ids: [group.id],
-        )
+        ::Invite.generate(::Discourse.system_user, email: email, group_ids: [group.id])
 
-        log_access(
-          payload: payload,
-          group: group,
-          action: "invite_sent",
-          status: "success",
-        )
+        log_access(payload: payload, group: group, action: "invite_sent", status: "success")
 
         mark_processed(payload)
 
-        render_success(
-          "Invite sent to #{email} with group #{group.name}",
-        )
+        render_success("Invite sent to #{email} with group #{group.name}")
       else
-        ::Invite.generate(
-          ::Discourse.system_user,
-          email: email,
-        )
+        ::Invite.generate(::Discourse.system_user, email: email)
 
         log_access(
           payload: payload,
           group: nil,
           action: "invite_sent",
           status: "success",
-          message:
-            "Standard invite sent without group assignment",
+          message: "Standard invite sent without group assignment",
         )
 
         mark_processed(payload)
 
-        render_success(
-          "Invite sent to #{email} without group assignment",
-        )
+        render_success("Invite sent to #{email} without group assignment")
       end
     end
 
-    def add_group_to_invite(
-      invite,
-      group
-    )
+    def add_group_to_invite(invite, group)
       return if invite.groups.exists?(id: group.id)
 
       invite.groups << group
     end
 
-    def handle_invite_user_exists(
-      payload,
-      group,
-      email
-    )
-      user =
-        ::User.find_by_email(email)
+    def handle_invite_user_exists(payload, group, email)
+      user = ::User.find_by_email(email)
 
       unless user
-        message =
-          "Race condition: user could not be found"
+        message = "Race condition: user could not be found"
 
         log_access(
           payload: payload,
@@ -448,42 +280,23 @@ module DiscourseBrandmeCommunityAccess
           message: message,
         )
 
-        return render_error(
-          "Unexpected state during invite",
-          :internal_server_error,
-        )
+        return render_error("Unexpected state during invite", :internal_server_error)
       end
 
-      handle_existing_user_purchase(
-        payload,
-        group,
-        user,
-      )
+      handle_existing_user_purchase(payload, group, user)
     end
 
     def handle_refund(payload, group)
-      unless group
-        return handle_unmapped_refund(payload)
-      end
+      return handle_unmapped_refund(payload) unless group
 
-      email =
-        normalize_email(payload["email"])
+      email = normalize_email(payload["email"])
 
-      user =
-        ::User.find_by_email(email)
+      user = ::User.find_by_email(email)
 
       if user
-        remove_user_from_group(
-          payload,
-          group,
-          user,
-        )
+        remove_user_from_group(payload, group, user)
       else
-        revoke_pending_invite_group(
-          payload,
-          group,
-          email,
-        )
+        revoke_pending_invite_group(payload, group, email)
       end
     end
 
@@ -493,36 +306,22 @@ module DiscourseBrandmeCommunityAccess
         group: nil,
         action: "no_action_needed",
         status: "success",
-        message:
-          "Product has no group mapping — no group entitlement to revoke",
+        message: "Product has no group mapping — no group entitlement to revoke",
       )
 
       mark_processed(payload)
 
-      render_success(
-        "No group mapping — no group access to revoke",
-      )
+      render_success("No group mapping — no group access to revoke")
     end
 
-    def remove_user_from_group(
-      payload,
-      group,
-      user
-    )
+    def remove_user_from_group(payload, group, user)
       group.remove(user)
 
-      log_access(
-        payload: payload,
-        group: group,
-        action: "removed_from_group",
-        status: "success",
-      )
+      log_access(payload: payload, group: group, action: "removed_from_group", status: "success")
 
       mark_processed(payload)
 
-      render_success(
-        "User #{user.username} removed from group #{group.name}",
-      )
+      render_success("User #{user.username} removed from group #{group.name}")
     rescue StandardError => e
       log_access(
         payload: payload,
@@ -532,25 +331,15 @@ module DiscourseBrandmeCommunityAccess
         message: e.message,
       )
 
-      render_error(
-        "Failed to remove user from group: #{e.message}",
-        :internal_server_error,
-      )
+      render_error("Failed to remove user from group: #{e.message}", :internal_server_error)
     end
 
-    def revoke_pending_invite_group(
-      payload,
-      group,
-      email
-    )
+    def revoke_pending_invite_group(payload, group, email)
       matching_invites =
-        find_pending_invites(email).select do |invite|
-          invite.groups.exists?(id: group.id)
-        end
+        find_pending_invites(email).select { |invite| invite.groups.exists?(id: group.id) }
 
       if matching_invites.empty?
-        message =
-          "No user or pending invite found for this group"
+        message = "No user or pending invite found for this group"
 
         log_access(
           payload: payload,
@@ -562,9 +351,7 @@ module DiscourseBrandmeCommunityAccess
 
         mark_processed(payload)
 
-        return render_success(
-          "No user or pending invite found — nothing to revoke",
-        )
+        return render_success("No user or pending invite found — nothing to revoke")
       end
 
       matching_invites.each do |invite|
@@ -573,18 +360,11 @@ module DiscourseBrandmeCommunityAccess
         invite.destroy! if invite.groups.empty?
       end
 
-      log_access(
-        payload: payload,
-        group: group,
-        action: "invite_revoked",
-        status: "success",
-      )
+      log_access(payload: payload, group: group, action: "invite_revoked", status: "success")
 
       mark_processed(payload)
 
-      render_success(
-        "Pending invite access revoked for group #{group.name}",
-      )
+      render_success("Pending invite access revoked for group #{group.name}")
     rescue StandardError => e
       log_access(
         payload: payload,
@@ -594,10 +374,7 @@ module DiscourseBrandmeCommunityAccess
         message: e.message,
       )
 
-      render_error(
-        "Failed to revoke invite access: #{e.message}",
-        :internal_server_error,
-      )
+      render_error("Failed to revoke invite access: #{e.message}", :internal_server_error)
     end
 
     def find_pending_invite(email)
@@ -610,16 +387,12 @@ module DiscourseBrandmeCommunityAccess
         .where(deleted_at: nil)
         .where(invalidated_at: nil)
         .where("expires_at > ?", Time.zone.now)
-        .where(
-          "redemption_count < max_redemptions_allowed",
-        )
+        .where("redemption_count < max_redemptions_allowed")
         .order(created_at: :desc)
     end
 
     def normalize_email(email)
-      ::Email.downcase(
-        email.to_s.strip,
-      )
+      ::Email.downcase(email.to_s.strip)
     end
 
     def mark_processed(payload)
@@ -628,9 +401,7 @@ module DiscourseBrandmeCommunityAccess
         event_type: payload["event"].to_s,
         order_id: payload["orderId"].to_s,
         product_id: payload["productId"].to_s,
-        email: normalize_email(
-          payload["email"],
-        ),
+        email: normalize_email(payload["email"]),
       )
     rescue ActiveRecord::RecordNotUnique
       # The composite unique index on webhook_id,
@@ -639,21 +410,13 @@ module DiscourseBrandmeCommunityAccess
       nil
     end
 
-    def log_access(
-      payload:,
-      group:,
-      action:,
-      status:,
-      message: nil
-    )
+    def log_access(payload:, group:, action:, status:, message: nil)
       AccessLog.create!(
         webhook_id: payload["webhookId"].to_s,
         event_type: payload["event"].to_s,
         order_id: payload["orderId"].to_s,
         product_id: payload["productId"].to_s,
-        email: normalize_email(
-          payload["email"],
-        ),
+        email: normalize_email(payload["email"]),
         group_name: group&.name,
         action: action,
         status: status,
@@ -662,27 +425,16 @@ module DiscourseBrandmeCommunityAccess
     rescue StandardError => e
       Rails.logger.error(
         "[BrandMe] Failed to create access log: " \
-        "#{e.class}: #{e.message}",
+          "#{e.class}: #{e.message}",
       )
     end
 
     def render_success(message)
-      render(
-        json: {
-          status: "success",
-          message: message,
-        },
-      )
+      render(json: { status: "success", message: message })
     end
 
     def render_error(message, status)
-      render(
-        json: {
-          status: "error",
-          message: message,
-        },
-        status: status,
-      )
+      render(json: { status: "error", message: message }, status: status)
     end
   end
 end
