@@ -12,7 +12,6 @@ module DiscourseBrandmeCommunityAccess
       invite_sent
       invite_updated
       invite_revoked
-      no_group_mapping
       no_action_needed
     ].freeze
 
