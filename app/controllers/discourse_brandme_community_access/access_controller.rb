@@ -10,7 +10,7 @@ module DiscourseBrandmeCommunityAccess
     skip_before_action :redirect_to_login_if_required
     skip_before_action :verify_authenticity_token
 
-    before_action :verify_hmac
+    before_action :verify_hmac, except: [:health]
 
     REPLAY_WINDOW_SECONDS = 300
     MAX_FUTURE_SECONDS = 60
@@ -41,6 +41,14 @@ module DiscourseBrandmeCommunityAccess
       when "refund"
         handle_refund(payload, group)
       end
+    end
+
+    def health
+      render(json: {
+        status: "ok",
+        plugin: "discourse-brandme-community-access",
+        version: "0.0.1",
+      })
     end
 
     private
