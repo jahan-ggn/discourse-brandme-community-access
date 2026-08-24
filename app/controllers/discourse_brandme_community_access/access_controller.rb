@@ -44,11 +44,7 @@ module DiscourseBrandmeCommunityAccess
     end
 
     def health
-      render(json: {
-        status: "ok",
-        plugin: "discourse-brandme-community-access",
-        version: "0.0.1",
-      })
+      render(json: { status: "ok", plugin: "discourse-brandme-community-access", version: "0.0.1" })
     end
 
     private
